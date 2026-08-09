@@ -12,6 +12,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Patch Kotlin version for XPopup2 compatibility
+        working-directory: simple_live_app/android
+        run: |
+          echo "=== Before patch ==="
+          grep 'kotlin.*version' settings.gradle.kts || true
+          sed -i '' 's/version "2\.1\.0"/version "1.9.22"/' settings.gradle.kts
+          echo "=== After patch ==="
+          grep 'kotlin.*version' settings.gradle.kts || true
+
       - name: Generate signing keystore
         run: |
           keytool -genkeypair -v -keystore simple_live_app/android/key.jks \
