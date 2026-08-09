@@ -29,6 +29,26 @@ jobs:
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses || true
 
+      - name: Fix Kotlin stdlib compatibility & add repositories
+        working-directory: simple_live_app/android
+        run: |
+          sed -i '/gradlePluginPortal()/a\        maven { url = uri("https://jitpack.io") }' settings.gradle.kts || true
+
+          cat >> build.gradle.kts << 'GRADLE_EOF'
+
+          // --- CI auto-patch: Kotlin 2.x stdlib compatibility ---
+          configurations.all {
+              resolutionStrategy {
+                  eachDependency {
+                      if (requested.group == "org.jetbrains.kotlin" &&
+                          requested.name.startsWith("kotlin-stdlib")) {
+                          useTarget("org.jetbrains.kotlin:kotlin-stdlib:${requested.version}")
+                      }
+                  }
+              }
+          }
+          GRADLE_EOF
+
       - name: Install dependencies
         working-directory: simple_live_app
         run: flutter pub get
