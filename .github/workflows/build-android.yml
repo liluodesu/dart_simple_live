@@ -29,25 +29,58 @@ jobs:
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses || true
 
-      - name: Fix Kotlin stdlib compatibility & add repositories
+      - name: Fix Kotlin 2.x compatibility
         working-directory: simple_live_app/android
         run: |
-          sed -i '/gradlePluginPortal()/a\        maven { url = uri("https://jitpack.io") }' settings.gradle.kts || true
+          echo "kotlin.stdlib.default.dependency=true" >> gradle.properties
 
-          cat >> build.gradle.kts << 'GRADLE_EOF'
+          python3 << 'PYEOF'
+          import re
 
-          // --- CI auto-patch: Kotlin 2.x stdlib compatibility ---
+          path = "settings.gradle.kts"
+          with open(path, "r", encoding="utf-8") as f:
+              content = f.read()
+
+          if "jitpack" not in content:
+              content = re.sub(
+                  r'(mavenCentral\s*$\s*$)',
+                  r'\1\n        maven { url = uri("https://jitpack.io") }',
+                  content,
+              )
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(content)
+              print("Added jitpack repository")
+          else:
+              print("jitpack already present")
+          PYEOF
+
+          python3 << 'PYEOF'
+          import re
+
+          path = "build.gradle.kts"
+          with open(path, "r", encoding="utf-8") as f:
+              content = f.read()
+
+          patch = """
+          // --- CI auto-patch: redirect removed kotlin-stdlib-jdk7/jdk8 -> kotlin-stdlib ---
           configurations.all {
-              resolutionStrategy {
-                  eachDependency {
-                      if (requested.group == "org.jetbrains.kotlin" &&
-                          requested.name.startsWith("kotlin-stdlib")) {
-                          useTarget("org.jetbrains.kotlin:kotlin-stdlib:${requested.version}")
-                      }
+              resolutionStrategy.eachDependency {
+                  if (requested.group == "org.jetbrains.kotlin" &&
+                      requested.name.matches(Regex("kotlin-stdlib(-jdk7|-jdk8)?"))) {
+                      useTarget("org.jetbrains.kotlin:kotlin-stdlib:${requested.version}")
                   }
               }
           }
-          GRADLE_EOF
+          """
+
+          if "CI auto-patch" not in content:
+              content = content.rstrip() + "\n" + patch + "\n"
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(content)
+              print("Added kotlin stdlib redirection rule")
+          else:
+              print("Patch already present")
+          PYEOF
 
       - name: Install dependencies
         working-directory: simple_live_app
